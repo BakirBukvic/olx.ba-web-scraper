@@ -36,15 +36,19 @@ def extract_data(url):
 
 
 
-def save_to_csv(titles, prices, filename='results.csv'):
-    # Zip titles and prices together
-    rows = list(zip(titles, prices))
-    
-    # Write to CSV
+
+def save_to_csv(items_dict, filename='results.csv'):
     with open(filename, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        writer.writerow(['Title', 'Price'])  # Headers
-        writer.writerows(rows)
+        writer.writerow(['ID', 'Title', 'Price'])  # Updated headers
+        
+        # Write rows from dictionary
+        for item_id, item_data in items_dict.items():
+            writer.writerow([
+                item_id,
+                item_data['title'],
+                item_data['price']
+            ])
 
 def scrape_all_pages(base_url, max_pages=10):
     all_titles = []
@@ -74,6 +78,14 @@ def scrape_all_pages(base_url, max_pages=10):
 
 
 # API TOKEN 
+
+def get_api_key():
+    print("\nDo you have an API key? (Optional)")
+    response = input("Enter API key or press Enter to skip: ").strip()
+    return response if response else None
+
+
+
 
 
 def get_credentials():
@@ -183,6 +195,7 @@ def construct_url(categories):
 
 
 
+
 if __name__ == "__main__":
     # Get user credentials
     username, password = get_credentials()
@@ -208,13 +221,30 @@ if __name__ == "__main__":
                 except ValueError:
                     print("Please enter a valid number")
 
+
+
+            api_key = get_api_key()
+
             input("\nPress Enter to start scraping...")
             print("\nStarting scrape...")
             
             # Scrape pages
             titles, prices = scrape_all_pages(base_url, max_pages=max_pages)
-            save_to_csv(titles, prices)
+            
             print(f"Total items scraped: {len(titles)}")
+            items_dict = {}
+            for index, (title, price) in enumerate(zip(titles, prices)):
+                items_dict[index + 1] = {
+                    'title': title,
+                    'price': price,
+                    'ID':index
+                }
+           
+             
+
+
+            save_to_csv(items_dict)
+
     else:
         print("Login failed!")
         exit(1)
