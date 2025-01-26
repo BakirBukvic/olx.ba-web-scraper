@@ -1,7 +1,7 @@
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 import csv
-
+from openai import OpenAI
 import requests
 
 from getpass import getpass
@@ -174,24 +174,71 @@ def display_categories_and_get_selection(categories):
         print("Category not found. Please try again.")
 
 def construct_url(categories):
-    # Get search input
+    # Get search input 
     search_text = input("Enter search text: ")
     
     # Get category selection
     category_id = display_categories_and_get_selection(categories)
+    selected_category = next(cat['name'] for cat in categories if cat['id'] == category_id)
     
-    # Construct URL with parameters
-    base = "https://olx.ba/pretraga"
-    params = {
-        'attr': '',
-        'attr_encoded': '1',
-        'q': search_text.replace(' ', '+'),
-        'category_id': category_id
+    # Return both URL and metadata
+    return {
+        'url': f"https://olx.ba/pretraga?attr=&attr_encoded=1&q={search_text.replace(' ', '+')}&category_id={category_id}",
+        'category': selected_category,
+        'search': search_text
     }
     
-    # Build URL string
-    param_string = '&'.join(f"{k}={v}" for k, v in params.items())
-    return f"{base}?{param_string}"
+
+
+def remove_outliers_using_gpt(items, api_key, category, search):
+    API_KEY = api_key
+    
+    # Format data for GPT
+    sending_to_gpt = {
+        item_id: {
+            'ID': item_data['ID'],
+            'Title': item_data['title']
+        }
+        for item_id, item_data in items.items()
+    }
+
+    # Construct prompt
+    prompt = f"""
+    Review these items and identify IDs of listings that don't match the search context.
+    
+    Category: {category}
+    Search Term: {search}
+    
+    Items to review:
+    {sending_to_gpt}
+    
+    Return only the IDs of items that don't fit the search context.
+    For example, if searching for "golf 2" in Vehicles category, exclude parts listings and only keep actual cars.
+    Another example: I searched for a phone, and the title is referencing to Phone chargers
+
+    Return format: List of IDs only, comma separated
+    """
+
+    client = OpenAI(api_key=API_KEY)
+    completion = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{
+            "role": "user",
+            "content": prompt
+        }]
+    )
+    
+    # Print GPT's response for testing
+    print("GPT Response:")
+    response = completion.choices[0].message.content
+    print(response)
+    
+    ids_to_remove = [int(id.strip()) for id in response.split(',') if id.strip().isdigit()]
+    
+    # Remove items with matching IDs
+    filtered_items = {k: v for k, v in items.items() if k not in ids_to_remove}
+    
+    return filtered_items
 
 
 
@@ -209,7 +256,8 @@ if __name__ == "__main__":
         categories = get_categories(token)
         if categories:
             # Construct search URL based on user input
-            base_url = construct_url(categories)
+            url_data = construct_url(categories) 
+            base_url = url_data['url']
             
             # Get number of pages to scrape
             while True:
@@ -234,15 +282,22 @@ if __name__ == "__main__":
             print(f"Total items scraped: {len(titles)}")
             items_dict = {}
             for index, (title, price) in enumerate(zip(titles, prices)):
-                items_dict[index + 1] = {
+                indexPlus = index+1
+                items_dict[indexPlus] = {
                     'title': title,
                     'price': price,
-                    'ID':index
+                    'ID':indexPlus
                 }
            
              
+            if api_key:
 
-
+                items_dict = remove_outliers_using_gpt(
+                items_dict,
+                api_key,
+                url_data['category'],
+                url_data['search']
+            )
             save_to_csv(items_dict)
 
     else:
