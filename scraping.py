@@ -3,10 +3,10 @@ from bs4 import BeautifulSoup
 import csv
 from openai import OpenAI
 import requests
-
+import time 
 from getpass import getpass
 
-def extract_data(url):
+def extract_data(url, token):
     with sync_playwright() as p:
         try:
             browser = p.chromium.launch(headless=True)
@@ -15,23 +15,71 @@ def extract_data(url):
             
             page.goto(url, wait_until="networkidle", timeout=30000)
             
-            try:
-                page.wait_for_selector('.price-wrap .smaller', timeout=10000)
-            except:
-                return {'prices': [], 'titles': [], 'no_results': True}
-            
             content = page.content()
             soup = BeautifulSoup(content, 'html.parser')
-            
-            prices = soup.select('.price-wrap .smaller, .price-wrap span.smaller')
-            titles = soup.select('.main-heading, article h1.main-heading')
+
             hrefs = soup.select('a[href^="/artikal/"]')  
-            
+            ids = []
+            prices = []
+            titles = []
+            api_logs = []  # New list to track API calls
+
+            for href in hrefs:
+                article_id = href['href'].split('/artikal/')[1].split('/')[0]
+                ids.append(article_id)
+
+            headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': f'Bearer {token}',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept': 'application/json'
+    }
+
+            for article_id in ids:
+                start_time = time.time()
+                try:
+                    response = requests.get(
+                        f'https://api.olx.ba/listings/{article_id}',
+                        headers=headers,
+                        timeout=10  # Added timeout
+                    )
+                    
+                    # Log API call details
+                    call_log = {
+                        'article_id': article_id,
+                        'status_code': response.status_code,
+                        'response_time': f"{(time.time() - start_time):.2f}s",
+                        'url': f'https://api.olx.ba/listings/{article_id}',
+                        'headers': headers,
+                    }
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        prices.append(data['display_price'])
+                        titles.append(data['title'])
+                        call_log['success'] = True
+                        call_log['data'] = {'price': data['display_price'], 'title': data['title']}
+                    else:
+                        print(f"API Error: Status {response.status_code} for ID {article_id}")
+                        call_log['success'] = False
+                        call_log['error'] = response.text
+
+                except requests.exceptions.RequestException as e:
+                    print(f"Request failed for ID {article_id}: {str(e)}")
+                    call_log = {
+                        'article_id': article_id,
+                        'success': False,
+                        'error': str(e)
+                    }
+
+                api_logs.append(call_log)
+
             return {
-                'prices': [p.text.strip() for p in prices],
-                'titles': [t.text.strip() for t in titles],
-                'hrefs': [f"https://olx.ba{h['href']}" for h in hrefs],  # Convert to full URLs
-                'no_results': len(prices) == 0
+                'prices': prices,
+                'titles': titles,
+                'hrefs': [f"https://olx.ba{h['href']}" for h in hrefs],
+                'no_results': len(prices) == 0,
+                'api_logs': api_logs  # Include API logs in return
             }
         finally:
             browser.close()
@@ -52,7 +100,7 @@ def save_to_csv(items_dict, filename='results.csv'):
                 item_data['price'],
                 item_data['url']  # Add URL to output
             ])
-def scrape_all_pages(base_url, max_pages=10):
+def scrape_all_pages(base_url,token, max_pages=10, ):
     all_titles = []
     all_prices = []
     all_hrefs = []
@@ -62,7 +110,7 @@ def scrape_all_pages(base_url, max_pages=10):
         current_url = f"{base_url}&page={page}"
         print(f"Scraping page {page}...")
         
-        results = extract_data(current_url)
+        results = extract_data(current_url, token)
         
         if results['no_results']:
             print("No more results found.")
@@ -281,7 +329,7 @@ if __name__ == "__main__":
             print("\nStarting scrape...")
             
             # Scrape pages
-            titles, prices,hrefs = scrape_all_pages(base_url, max_pages=max_pages)
+            titles, prices,hrefs = scrape_all_pages(base_url,token, max_pages=max_pages, )
             
             print(f"Total items scraped: {len(titles)}")
             items_dict = {}
