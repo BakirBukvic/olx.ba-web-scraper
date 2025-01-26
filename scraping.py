@@ -25,10 +25,12 @@ def extract_data(url):
             
             prices = soup.select('.price-wrap .smaller, .price-wrap span.smaller')
             titles = soup.select('.main-heading, article h1.main-heading')
+            hrefs = soup.select('a[href^="/artikal/"]')  
             
             return {
                 'prices': [p.text.strip() for p in prices],
                 'titles': [t.text.strip() for t in titles],
+                'hrefs': [f"https://olx.ba{h['href']}" for h in hrefs],  # Convert to full URLs
                 'no_results': len(prices) == 0
             }
         finally:
@@ -40,19 +42,20 @@ def extract_data(url):
 def save_to_csv(items_dict, filename='results.csv'):
     with open(filename, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        writer.writerow(['ID', 'Title', 'Price'])  # Updated headers
+        writer.writerow(['ID', 'Title', 'Price','URL'])  # Updated headers
         
         # Write rows from dictionary
         for item_id, item_data in items_dict.items():
             writer.writerow([
                 item_id,
                 item_data['title'],
-                item_data['price']
+                item_data['price'],
+                item_data['url']  # Add URL to output
             ])
-
 def scrape_all_pages(base_url, max_pages=10):
     all_titles = []
     all_prices = []
+    all_hrefs = []
     page = 1
 
     while page <= max_pages:
@@ -67,6 +70,7 @@ def scrape_all_pages(base_url, max_pages=10):
             
         all_titles.extend(results['titles'])
         all_prices.extend(results['prices'])
+        all_hrefs.extend(results['hrefs'])
         
         if page == max_pages:
             print(f"Reached maximum page limit: {max_pages}")
@@ -74,7 +78,7 @@ def scrape_all_pages(base_url, max_pages=10):
             
         page += 1
         
-    return all_titles, all_prices
+    return all_titles, all_prices, all_hrefs
 
 
 # API TOKEN 
@@ -277,16 +281,17 @@ if __name__ == "__main__":
             print("\nStarting scrape...")
             
             # Scrape pages
-            titles, prices = scrape_all_pages(base_url, max_pages=max_pages)
+            titles, prices,hrefs = scrape_all_pages(base_url, max_pages=max_pages)
             
             print(f"Total items scraped: {len(titles)}")
             items_dict = {}
-            for index, (title, price) in enumerate(zip(titles, prices)):
+            for index, (title, price,href) in enumerate(zip(titles, prices,hrefs)):
                 indexPlus = index+1
                 items_dict[indexPlus] = {
                     'title': title,
                     'price': price,
-                    'ID':indexPlus
+                    'url' : href,
+                    'ID':indexPlus,
                 }
            
              
