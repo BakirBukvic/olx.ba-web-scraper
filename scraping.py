@@ -5,6 +5,9 @@ from openai import OpenAI
 import requests
 import time 
 from getpass import getpass
+from dotenv import load_dotenv
+import os
+
 
 def extract_data(url, token):
     with sync_playwright() as p:
@@ -132,18 +135,57 @@ def scrape_all_pages(base_url,token, max_pages=10, ):
 # API TOKEN 
 
 def get_api_key():
-    print("\nDo you have an API key? (Optional)")
-    response = input("Enter API key or press Enter to skip: ").strip()
-    return response if response else None
+    # Load environment variables
+    load_dotenv()
+    
+    # Try to get API key from environment
+    api_key = os.getenv('OPEN_AI_API')
+    
+    # Check if API key exists and is not empty
+    if not api_key or api_key.strip() == "":
+        print("\nNo stored API key found.")
+        response = input("Enter API key or press Enter to skip: ").strip()
+        
+        if response:
+            save = input("Save API key for next time? (y/n): ").lower()
+            if save == 'y':
+                with open('.env', 'a') as f:
+                    f.write(f'\nOPEN_AI_API={response}\n')
+                print("API key saved!")
+            return response
+        return None
+    
+    print("Using stored API key")
+    return api_key
 
 
 
 
 
 def get_credentials():
-    print("Please login to OLX:")
-    username = input("Username (email): ")
-    password = input("Password: ")
+    # Load environment variables
+    load_dotenv()
+    
+    # Get credentials from environment
+    username = os.getenv('OLX_USERNAME')
+    password = os.getenv('OLX_PASSWORD')
+    
+    # Check if credentials exist and are not empty
+    if not username or not password or username.strip() == "" or password.strip() == "":
+        print("No stored credentials found. Please login to OLX:")
+        username = input("Username (email): ")
+        password = input("Password: ")
+        
+        # Ask if user wants to save credentials
+        save = input("Save credentials for next time? (y/n): ").lower()
+        if save == 'y':
+            with open('.env', 'w') as f:
+                f.write(f'OLX_USERNAME={username}\n')
+                f.write(f'OLX_PASSWORD={password}\n')
+            print("Credentials saved!")
+    else:
+        print("Using stored credentials")
+    
     return username, password
 
 def login_to_olx(username, password, device_name="integration"):
