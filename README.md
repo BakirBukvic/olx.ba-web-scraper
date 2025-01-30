@@ -26,8 +26,8 @@ CISCENJE
 
 2. Korisit Open AI za ciscenje predmeta ciji titlovi ne pripadaju korisnikovim parametrima (kategroiji i tekst pretrazivanja).
 Ovaj dio nije nuzan, ako korisnik nema Open AI API key samo preskoci.
-Ako ima: Salje u batchovima python dict, koji u sebi sadrze ID i Title, ako dzipiti primjeti da neki titl ne pripada u kontestku onda posalje nazad ID, sa ' , ' delimiterom
-3. Svi ID-ovi koje Dzipiti primjeti se prikupe, te dati ID-ovi se izbrisu iz Dataseta.
+Ako ima: Salje u batchovima python dict, koji u sebi sadrze ID i Title, ako Džipiti primjeti da neki titl ne pripada u kontestku onda posalje nazad ID, sa ' , ' delimiterom
+3. Svi ID-ovi koje Džipiti primjeti se prikupe, te dati ID-ovi se izbrisu iz Dataseta.
 
 Porhani se u csv formatu: 
 ID, price, title
